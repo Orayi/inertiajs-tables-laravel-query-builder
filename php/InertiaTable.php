@@ -10,245 +10,247 @@ use Inertia\Response;
 
 class InertiaTable
 {
-    private Request $request;
-    private Collection $columns;
-    private Collection $search;
-    private Collection $filters;
-    private bool $globalSearch = true;
+	private Request $request;
+	private Collection $columns;
+	private Collection $search;
+	private Collection $filters;
+	private bool $globalSearch = true;
 
-    public function __construct(Request $request)
-    {
-        $this->request = $request;
+	public function __construct(Request $request)
+	{
+		$this->request = $request;
 
-        $this->columns = new Collection;
-        $this->search  = new Collection;
-        $this->filters = new Collection;
-    }
+		$this->columns = new Collection;
+		$this->search = new Collection;
+		$this->filters = new Collection;
+	}
 
-    /**
-     * Disable the global search.
-     *
-     * @return self
-     */
-    public function disableGlobalSearch(): self
-    {
-        $this->globalSearch = false;
+	/**
+	 * Disable the global search.
+	 *
+	 * @return self
+	 */
+	public function disableGlobalSearch(): self
+	{
+		$this->globalSearch = false;
 
-        return $this;
-    }
+		return $this;
+	}
 
-    /**
-     * Collects all properties and sets the default
-     * values from the request query.
-     *
-     * @return array
-     */
-    public function getQueryBuilderProps(): array
-    {
-        $columns = $this->transformColumns();
-        $search  = $this->transformSearch();
-        $filters = $this->transformFilters();
+	/**
+	 * Give the query builder props to the given Inertia response.
+	 *
+	 * @param \Inertia\Response $response
+	 * @return \Inertia\Response
+	 */
+	public function applyTo(Response $response): Response
+	{
+		return $response->with('queryBuilderProps', $this->getQueryBuilderProps());
+	}
 
-        return [
-            'sort'    => $this->request->query('sort'),
-            'page'    => Paginator::resolveCurrentPage(),
-            'columns' => $columns->isNotEmpty() ? $columns->all() : (object) [],
-            'search'  => $search->isNotEmpty() ? $search->all() : (object) [],
-            'filters' => $filters->isNotEmpty() ? $filters->all() : (object) [],
-        ];
-    }
+	/**
+	 * Collects all properties and sets the default
+	 * values from the request query.
+	 *
+	 * @return array
+	 */
+	public function getQueryBuilderProps(): array
+	{
+		$columns = $this->transformColumns();
+		$search = $this->transformSearch();
+		$filters = $this->transformFilters();
 
-    /**
-     * Transform the columns collection so it can be used in the Inertia front-end.
-     *
-     * @return \Illuminate\Support\Collection
-     */
-    private function transformColumns(): Collection
-    {
-        $columns = $this->request->query('columns', []);
+		return [
+			'sort' => $this->request->query('sort'),
+			'page' => Paginator::resolveCurrentPage(),
+			'columns' => $columns->isNotEmpty() ? $columns->all() : (object)[],
+			'search' => $search->isNotEmpty() ? $search->all() : (object)[],
+			'filters' => $filters->isNotEmpty() ? $filters->all() : (object)[],
+		];
+	}
 
-        if (empty($columns)) {
-            return $this->columns;
-        }
+	/**
+	 * Transform the columns collection so it can be used in the Inertia front-end.
+	 *
+	 * @return \Illuminate\Support\Collection
+	 */
+	private function transformColumns(): Collection
+	{
+		$columns = $this->request->query('columns', []);
 
-        return $this->columns->map(function ($column, $key) use ($columns) {
-            if (!in_array($key, $columns)) {
-                $column['enabled'] = false;
-            }
+		if (empty($columns)) {
+			return $this->columns;
+		}
 
-            return $column;
-        });
-    }
+		return $this->columns->map(function ($column, $key) use ($columns) {
+			if (!in_array($key, $columns)) {
+				$column['enabled'] = false;
+			}
 
-    /**
-     * Transform the search collection so it can be used in the Inertia front-end.
-     *
-     * @return \Illuminate\Support\Collection
-     */
-    private function transformSearch(): Collection
-    {
-        $search = $this->search->collect();
+			return $column;
+		});
+	}
 
-        if ($this->globalSearch) {
-            $search->prepend([
-                'key'   => 'global',
-                'label' => 'global',
-                'value' => null,
-            ], 'global');
-        }
+	/**
+	 * Transform the search collection so it can be used in the Inertia front-end.
+	 *
+	 * @return \Illuminate\Support\Collection
+	 */
+	private function transformSearch(): Collection
+	{
+		$search = $this->search->collect();
 
-        $filters = $this->request->query('filter', []);
+		if ($this->globalSearch) {
+			$search->prepend([
+				'key' => 'global',
+				'label' => 'global',
+				'value' => null,
+			], 'global');
+		}
 
-        if (empty($filters)) {
-            return $search;
-        }
+		$filters = $this->request->query('filter', []);
 
-        return $search->map(function ($search, $key) use ($filters) {
-            if (!array_key_exists($key, $filters)) {
-                return $search;
-            }
+		if (empty($filters)) {
+			return $search;
+		}
 
-            $search['value'] = $filters[$key];
-            $search['enabled'] = true;
+		return $search->map(function ($search, $key) use ($filters) {
+			if (!array_key_exists($key, $filters)) {
+				return $search;
+			}
 
-            return $search;
-        });
-    }
+			$search['value'] = $filters[$key];
+			$search['enabled'] = true;
 
-    /**
-     * Transform the filters collection so it can be used in the Inertia front-end.
-     *
-     * @return \Illuminate\Support\Collection
-     */
-    private function transformFilters(): Collection
-    {
-        $filters = $this->request->query('filter', []);
+			return $search;
+		});
+	}
 
-        if (empty($filters)) {
-            return $this->filters;
-        }
+	/**
+	 * Transform the filters collection so it can be used in the Inertia front-end.
+	 *
+	 * @return \Illuminate\Support\Collection
+	 */
+	private function transformFilters(): Collection
+	{
+		$filters = $this->request->query('filter', []);
 
-        return $this->filters->map(function ($filter, $key) use ($filters) {
-            if (!array_key_exists($key, $filters)) {
-                return $filter;
-            }
+		if (empty($filters)) {
+			return $this->filters;
+		}
 
-            $value = $filters[$key];
+		return $this->filters->map(function ($filter, $key) use ($filters) {
+			if (!array_key_exists($key, $filters)) {
+				return $filter;
+			}
 
-            if (!array_key_exists($value, $filter['options'] ?? [])) {
-                return $filter;
-            }
+			$value = $filters[$key];
 
-            $filter['value'] = $value;
+			if (!array_key_exists($value, $filter['options'] ?? [])) {
+				return $filter;
+			}
 
-            return $filter;
-        });
-    }
+			$filter['value'] = $value;
 
-    /**
-     * Give the query builder props to the given Inertia response.
-     *
-     * @param \Inertia\Response $response
-     * @return \Inertia\Response
-     */
-    public function applyTo(Response $response): Response
-    {
-        return $response->with('queryBuilderProps', $this->getQueryBuilderProps());
-    }
+			return $filter;
+		});
+	}
 
-    /**
-     * Add a column to the query builder.
-     *
-     * @param string $key
-     * @param string $label
-     * @param bool $enabled
-     * @return self
-     */
-    public function addColumn(string $key, string $label, bool $enabled = true): self
-    {
-        $this->columns->put($key, [
-            'key'     => $key,
-            'label'   => $label,
-            'enabled' => $enabled,
-        ]);
+	/**
+	 * Add an action to the query builder.
+	 *
+	 * @param string $key
+	 * @param string $label
+	 * @param bool $enabled
+	 * @return self
+	 */
+	public function addActionColumn(string $key, string $label, string $action = '#', string $icon = '', bool $enabled = true): self
+	{
+		$this->columns->put($key, [
+			'type' => 'action',
+			'key' => $key,
+			'label' => $label,
+			'action' => $action,
+			'icon' => $icon,
+			'enabled' => $enabled,
+		]);
 
-        return $this;
-    }
+		return $this;
+	}
 
-    /**
-     * Add an action to the query builder.
-     *
-     * @param string $key
-     * @param string $label
-     * @param bool $enabled
-     * @return self
-     */
-    public function addActionColumn(string $key, string $label, string $action, string $icon, bool $enabled = true): self
-    {
-        $this->columns->put($key, [
-            'key'     => $key,
-            'label'   => $label,
-            'action'   => $action,
-            'icon'   => $icon,
-            'enabled' => $enabled,
-        ]);
+	public function addColumns(array $columns = []): self
+	{
+		foreach ($columns as $key => $value) {
+			$this->addColumn($key, $value, true);
+		}
 
-        return $this;
-    }
+		return $this;
+	}
 
-    public function addColumns(array $columns = []): self
-    {
-        foreach ($columns as $key => $value) {
-            $this->addColumn($key, $value, true);
-        }
+	/**
+	 * Add a column to the query builder.
+	 *
+	 * @param string $key
+	 * @param string $label
+	 * @param bool $enabled
+	 * @return self
+	 */
+	public function addColumn(string $key, string $label, bool $enabled = true, string $type = 'standard'): self
+	{
+		$this->columns->put($key, [
+			'type' => $type,
+			'key' => $key,
+			'label' => $label,
+			'enabled' => $enabled,
+		]);
 
-        return $this;
-    }
+		return $this;
+	}
 
-    /**
-     * Add a search row to the query builder.
-     *
-     * @param string $key
-     * @param string $label
-     * @return self
-     */
-    public function addSearch(string $key, string $label): self
-    {
-        $this->search->put($key, [
-            'key'   => $key,
-            'label' => $label,
-            'value' => null,
-        ]);
+	public function addSearchRows(array $columns = []): self
+	{
+		foreach ($columns as $key => $label) {
+			$this->addSearch($key, $label);
+		}
 
-        return $this;
-    }
+		return $this;
+	}
 
-    public function addSearchRows(array $columns = []): self
-    {
-        foreach ($columns as $key => $label) {
-            $this->addSearch($key, $label);
-        }
+	/**
+	 * Add a search row to the query builder.
+	 *
+	 * @param string $key
+	 * @param string $label
+	 * @return self
+	 */
+	public function addSearch(string $key, string $label): self
+	{
+		$this->search->put($key, [
+			'key' => $key,
+			'label' => $label,
+			'value' => null,
+		]);
 
-        return $this;
-    }
+		return $this;
+	}
 
-    /**
-     * Add a filter to the query builder.
-     *
-     * @param string $key
-     * @param string $label
-     * @param array $options
-     * @return self
-     */
-    public function addFilter(string $key, string $label, array $options): self
-    {
-        $this->filters->put($key, [
-            'key'     => $key,
-            'label'   => $label,
-            'options' => Arr::prepend($options, '-', ''),
-            'value'   => null,
-        ]);
+	/**
+	 * Add a filter to the query builder.
+	 *
+	 * @param string $key
+	 * @param string $label
+	 * @param array $options
+	 * @return self
+	 */
+	public function addFilter(string $key, string $label, array $options): self
+	{
+		$this->filters->put($key, [
+			'key' => $key,
+			'label' => $label,
+			'options' => Arr::prepend($options, '-', ''),
+			'value' => null,
+		]);
 
-        return $this;
-    }
+		return $this;
+	}
 }
